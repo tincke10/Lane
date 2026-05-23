@@ -136,6 +136,85 @@ func TestInit_NonexistentPath_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestInit_ComposeWithoutVarReferences_PrintsWarning(t *testing.T) {
+	run := runner(t)
+	dir := t.TempDir()
+	// Compose mentions Lane-relevant services (so init allocates ports for them)
+	// but hardcodes the ports — Lane's exports would be ignored.
+	composeBody := `services:
+  app:
+    image: nginx
+    ports:
+      - "80:80"
+  db:
+    image: mysql:8
+    ports:
+      - "3306:3306"
+`
+	if err := os.WriteFile(filepath.Join(dir, "docker-compose.yml"), []byte(composeBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "composer.json"), []byte(`{"require":{"laravel/framework":"^11"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, code := run("init", "--path", dir, "--name", "warnme")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d stdout=%s", code, stdout)
+	}
+	if !strings.Contains(stdout, "warning") {
+		t.Errorf("stdout missing convention warning: %s", stdout)
+	}
+	if !strings.Contains(stdout, "APP_PORT") {
+		t.Errorf("warning should name APP_PORT: %s", stdout)
+	}
+	if !strings.Contains(stdout, "FORWARD_DB_PORT") {
+		t.Errorf("warning should name FORWARD_DB_PORT: %s", stdout)
+	}
+}
+
+func TestInit_ComposeWithVarReferences_NoWarning(t *testing.T) {
+	run := runner(t)
+	dir := t.TempDir()
+	composeBody := `services:
+  app:
+    image: nginx
+    ports:
+      - "${APP_PORT:-80}:80"
+  db:
+    image: mysql:8
+    ports:
+      - "${FORWARD_DB_PORT:-3306}:3306"
+`
+	if err := os.WriteFile(filepath.Join(dir, "docker-compose.yml"), []byte(composeBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "composer.json"), []byte(`{"require":{"laravel/framework":"^11"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, code := run("init", "--path", dir, "--name", "clean")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if strings.Contains(stdout, "warning") {
+		t.Errorf("expected no warning when compose references vars: %s", stdout)
+	}
+}
+
+func TestInit_NoCompose_NoWarning(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t) // no docker-compose
+
+	stdout, _, code := run("init", "--path", proj, "--name", "nocompose")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if strings.Contains(stdout, "warning") {
+		t.Errorf("expected no warning when project has no compose: %s", stdout)
+	}
+}
+
 // -- list / rm ----------------------------------------------------------
 
 func TestList_EmptyRegistry_PrintsHint(t *testing.T) {

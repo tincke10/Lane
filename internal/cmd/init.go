@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/tincke10/lane/internal/convention"
 	"github.com/tincke10/lane/internal/ports"
 	"github.com/tincke10/lane/internal/registry"
 	"github.com/tincke10/lane/internal/stack"
@@ -84,6 +85,18 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 	}
 	for _, env := range sortedEnvKeys(allocated) {
 		fmt.Fprintf(stdout, "  %s=%d\n", env, allocated[env])
+	}
+
+	// A bad compose file should never block init — we silently skip the
+	// convention check on read error and report missing references as a
+	// non-fatal warning.
+	if missing, err := convention.Validate(path, sortedEnvKeys(allocated)); err == nil && len(missing) > 0 {
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "  warning: docker-compose.yml does not reference these env vars:")
+		for _, v := range missing {
+			fmt.Fprintf(stdout, "    - %s (allocated %d, but compose will ignore it)\n", v, allocated[v])
+		}
+		fmt.Fprintln(stdout, "  use the ${VAR:-default}:default pattern in your compose ports to opt in.")
 	}
 	return ExitOK
 }
