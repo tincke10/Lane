@@ -28,11 +28,16 @@ Usage:
   lane list                                list registered projects
   lane rm <name>                           remove a project from the registry
   lane doctor                              diagnose registry health and port conflicts
+  lane hook <bash|zsh>                     print shell hook for auto-activation on cd
+  lane export                              hook-driven activation diff (called from prompt)
   lane help                                show this help
 
-Activation pattern (bash/zsh):
+Activation pattern (manual, bash/zsh):
   eval "$(lane use my-project)"
   eval "$(lane unuse)"
+
+Auto-activation (add to ~/.bashrc or ~/.zshrc once):
+  eval "$(lane hook zsh)"
 `
 
 // Run dispatches a Lane subcommand. args is the program args WITHOUT the
@@ -56,6 +61,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return cmdRm(args[1:], stdout, stderr)
 	case "doctor":
 		return cmdDoctor(args[1:], stdout, stderr)
+	case "hook":
+		return cmdHook(args[1:], stdout, stderr)
+	case "export":
+		return cmdExport(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return ExitOK

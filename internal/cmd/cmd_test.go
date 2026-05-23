@@ -425,3 +425,195 @@ func TestDoctor_BadArgs_ReturnsUsage(t *testing.T) {
 		t.Errorf("stderr missing usage: %s", stderr)
 	}
 }
+
+// -- hook ---------------------------------------------------------------
+
+func TestHook_Bash_EmitsPromptCommandInstallation(t *testing.T) {
+	run := runner(t)
+	stdout, _, code := run("hook", "bash")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "PROMPT_COMMAND") {
+		t.Errorf("bash hook missing PROMPT_COMMAND wiring: %s", stdout)
+	}
+	if !strings.Contains(stdout, "lane export") {
+		t.Errorf("bash hook missing 'lane export' call: %s", stdout)
+	}
+}
+
+func TestHook_Zsh_EmitsPrecmdInstallation(t *testing.T) {
+	run := runner(t)
+	stdout, _, code := run("hook", "zsh")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "precmd_functions") {
+		t.Errorf("zsh hook missing precmd_functions wiring: %s", stdout)
+	}
+	if !strings.Contains(stdout, "lane export") {
+		t.Errorf("zsh hook missing 'lane export' call: %s", stdout)
+	}
+}
+
+func TestHook_UnsupportedShell_ReturnsUsage(t *testing.T) {
+	run := runner(t)
+	_, stderr, code := run("hook", "tcsh")
+	if code != cmd.ExitUsage {
+		t.Errorf("code=%d, want %d", code, cmd.ExitUsage)
+	}
+	if !strings.Contains(stderr, "unsupported") {
+		t.Errorf("stderr missing 'unsupported': %s", stderr)
+	}
+}
+
+func TestHook_NoArgs_ReturnsUsage(t *testing.T) {
+	run := runner(t)
+	_, stderr, code := run("hook")
+	if code != cmd.ExitUsage {
+		t.Errorf("code=%d, want %d", code, cmd.ExitUsage)
+	}
+	if !strings.Contains(stderr, "usage") {
+		t.Errorf("stderr missing 'usage': %s", stderr)
+	}
+}
+
+// -- export -------------------------------------------------------------
+
+func TestExport_InsideProject_EmitsActivate(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	t.Chdir(proj)
+
+	stdout, _, code := run("export")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "export LANE_ACTIVE_PROJECT='myapp'") {
+		t.Errorf("export missing activate: %s", stdout)
+	}
+}
+
+func TestExport_InSubdirOfProject_EmitsActivate(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	sub := filepath.Join(proj, "deep", "subdir")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run("init", "--path", proj, "--name", "myapp")
+
+	t.Chdir(sub)
+
+	stdout, _, code := run("export")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "myapp") {
+		t.Errorf("export from subdir failed to find parent project: %s", stdout)
+	}
+}
+
+func TestExport_OutsideProject_NoActiveProject_EmitsNothing(t *testing.T) {
+	run := runner(t)
+	outside := t.TempDir()
+	t.Chdir(outside)
+
+	stdout, _, code := run("export")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if stdout != "" {
+		t.Errorf("export outside any project should be empty, got: %q", stdout)
+	}
+}
+
+func TestExport_AlreadyInActiveProject_EmitsNothing(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	t.Chdir(proj)
+	t.Setenv("LANE_ACTIVE_PROJECT", "myapp")
+
+	stdout, _, code := run("export")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if stdout != "" {
+		t.Errorf("export when already active should be empty, got: %q", stdout)
+	}
+}
+
+func TestExport_LeavingProject_EmitsDeactivate(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	outside := t.TempDir()
+	t.Chdir(outside)
+	t.Setenv("LANE_ACTIVE_PROJECT", "myapp")
+
+	stdout, _, code := run("export")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "unset LANE_ACTIVE_PROJECT") {
+		t.Errorf("export leaving project should emit unset: %s", stdout)
+	}
+	if !strings.Contains(stdout, "unset APP_PORT") {
+		t.Errorf("export leaving project should unset port vars: %s", stdout)
+	}
+}
+
+func TestExport_SwitchingProjects_EmitsDeactivateThenActivate(t *testing.T) {
+	run := runner(t)
+	projA := laravelProject(t)
+	run("init", "--path", projA, "--name", "app-a")
+	projB := laravelProject(t)
+	run("init", "--path", projB, "--name", "app-b")
+
+	t.Chdir(projB)
+	t.Setenv("LANE_ACTIVE_PROJECT", "app-a")
+
+	stdout, _, code := run("export")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	unsetIdx := strings.Index(stdout, "unset LANE_ACTIVE_PROJECT")
+	exportIdx := strings.Index(stdout, "export LANE_ACTIVE_PROJECT='app-b'")
+	if unsetIdx == -1 || exportIdx == -1 {
+		t.Fatalf("expected both unset+export, got: %s", stdout)
+	}
+	if unsetIdx >= exportIdx {
+		t.Errorf("unset must precede export in switch output, got: %s", stdout)
+	}
+}
+
+func TestExport_OrphanedActiveProject_EmitsBareUnset(t *testing.T) {
+	run := runner(t)
+	outside := t.TempDir()
+	t.Chdir(outside)
+	t.Setenv("LANE_ACTIVE_PROJECT", "ghost-app")
+
+	stdout, _, code := run("export")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if stdout != "unset LANE_ACTIVE_PROJECT\n" {
+		t.Errorf("orphan should clear marker only, got: %q", stdout)
+	}
+}
+
+func TestExport_BadArgs_ReturnsUsage(t *testing.T) {
+	run := runner(t)
+	_, stderr, code := run("export", "extra")
+	if code != cmd.ExitUsage {
+		t.Errorf("code=%d, want %d", code, cmd.ExitUsage)
+	}
+	if !strings.Contains(stderr, "usage") {
+		t.Errorf("stderr missing usage: %s", stderr)
+	}
+}
