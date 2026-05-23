@@ -143,6 +143,7 @@ $ eval "$(lane unuse)"
 | `lane unuse` | Print `unset` statements for the project named in `LANE_ACTIVE_PROJECT`. Safe to run when nothing is active. |
 | `lane list` (alias `ls`) | List all registered projects with their paths, stacks, and ports. |
 | `lane rm <name>` (alias `remove`) | Remove a project from the registry. |
+| `lane doctor` | Diagnose registry health: missing paths, cross-project port collisions, currently bound ports, stack drift, orphaned active project. Exits non-zero only on errors; warnings are informational. |
 | `lane help` | Show usage. |
 | `lane version` | Print the version. |
 
@@ -299,6 +300,7 @@ internal/registry/    TOML-backed registry of projects and reserved ports.
 internal/ports/       Free-port detection and collision-aware allocator.
 internal/stack/       Filesystem-based stack detection (composer/package.json/etc).
 internal/activator/   Generates POSIX `export` / `unset` statements.
+internal/doctor/      Diagnostic checks for registry health (used by `lane doctor`).
 internal/cmd/         CLI dispatcher and subcommand handlers.
 ```
 
