@@ -47,6 +47,77 @@ else.
 
 ---
 
+## Supported stacks
+
+Lane works out of the box with the stacks most fullstack developers
+touch every day. "Out of the box" means: `lane init` recognizes the
+project, allocates the right environment variables, and there is a
+matching `lane <framework>` runner that wires the port into the dev
+server automatically.
+
+### Web frameworks (HTTP app server, `$APP_PORT`)
+
+| Stack | Detected from | Default port | Runner |
+|---|---|---|---|
+| **Laravel** (with or without Sail) | `composer.json` requiring `laravel/framework` | `8080` | `lane serve` → `php artisan serve` |
+| **Django** | `manage.py`, or `django` in `requirements.txt` / `pyproject.toml` | `8000` | `lane django` → `python manage.py runserver` |
+| **Flask** | `flask` in `requirements.txt` / `pyproject.toml` | `5000` | `lane flask` → `flask run` |
+| **Next.js** | `next` in `package.json` dependencies | `3000` | `lane next` → `npx next dev` |
+
+### Frontend dev servers (`$VITE_PORT`)
+
+| Stack | Detected from | Default port | Runner |
+|---|---|---|---|
+| **Vite** | `vite` in `package.json` dependencies | `5173` | `lane vite` → `npx vite` |
+
+### Containerized services (`$FORWARD_DB_PORT`, `$FORWARD_REDIS_PORT`)
+
+| Stack | Detected from | Default port | Runner |
+|---|---|---|---|
+| **MySQL** | `mysql` in `docker-compose.yml` | `33060` | (none needed — Compose reads the env var) |
+| **PostgreSQL** | `postgres` in `docker-compose.yml` | `54320` | (none needed) |
+| **Redis** | `redis` in `docker-compose.yml` | `63790` | (none needed) |
+
+### Things that "just work" without a runner
+
+- **Docker / Docker Compose / Laravel Sail** — Compose reads
+  `${APP_PORT:-80}:80` from the env Lane exports. `docker compose up`,
+  `sail up`, anything that uses Compose substitution: zero changes.
+- **Multiple instances of the same framework** — two Laravel projects,
+  two Django projects, etc. Each gets a unique port (8080, 8081, 8082,
+  …) at `lane init` time.
+- **Mixed stacks in one terminal session** — auto-activation switches
+  the exported vars whenever you `cd` into a different project.
+
+### Things Lane does NOT cover yet
+
+Lane is intentionally conservative — runners only exist for frameworks
+where the dev-server invocation is unambiguous. If you need one of
+these, the port is still allocated (set `lane init` and read `$APP_PORT`
+from your shell) but you wire the flag yourself:
+
+- **Rails** (`bin/rails server -p $APP_PORT`)
+- **Express / Fastify / Hono** — most read `process.env.PORT`; map it
+  with a one-liner in your code or `PORT=$APP_PORT npm run dev`
+- **Go services** — same idea, read `os.Getenv("APP_PORT")` in `main.go`
+- **Phoenix, ASP.NET, Spring Boot, anything else** — same pattern
+
+If you want a runner for one of these, open an issue (or grep for
+`cmdServe` in `internal/cmd/runners.go` — each runner is ~15 lines).
+
+### What Lane does NOT do, on purpose
+
+- It does **not** rewrite your `docker-compose.yml`, `.env`, `vite.config.js`,
+  or any other file in your project.
+- It does **not** manage Docker networks, volumes, or images.
+- It does **not** orchestrate process lifecycles (start/stop/restart).
+- It does **not** proxy network traffic.
+
+Lane reserves ports and exposes them as env vars. Everything downstream
+of that is the framework's job.
+
+---
+
 ## How it works
 
 Lane stores one TOML file (`~/.config/lane/projects.toml` by default,
@@ -432,28 +503,6 @@ internal/cmd/         CLI dispatcher and subcommand handlers.
 Each internal package is independently testable. `ports` and `stack`
 have no dependencies on the registry; `cmd` is the only layer that
 wires them together.
-
----
-
-## Scope and non-goals
-
-**Lane does:**
-
-- Track which projects have which ports reserved.
-- Detect a project's stack from filesystem markers.
-- Export shell variables that downstream tools (Docker, Vite, Laravel,
-  etc.) read by convention.
-- Refuse to activate when a reserved port is already in use.
-
-**Lane does not:**
-
-- Start, stop, or restart your services.
-- Edit `docker-compose.yml`, `.env`, or any other file in your project.
-- Proxy or rewrite network traffic.
-- Manage Docker volumes, images, or networks.
-
-If you need any of those, Lane will compose cleanly with the right
-dedicated tool — it stays out of the way on purpose.
 
 ---
 
