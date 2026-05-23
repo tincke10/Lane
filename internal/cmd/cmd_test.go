@@ -102,6 +102,9 @@ func TestInit_DuplicateName_ReturnsError(t *testing.T) {
 	if !strings.Contains(stderr, "already registered") {
 		t.Errorf("stderr missing 'already registered': %s", stderr)
 	}
+	if !strings.Contains(stderr, "hint:") || !strings.Contains(stderr, "lane rm myapp") {
+		t.Errorf("stderr missing rm hint: %s", stderr)
+	}
 }
 
 func TestInit_DefaultNameFromBasename(t *testing.T) {
@@ -131,8 +134,27 @@ func TestInit_NonexistentPath_ReturnsError(t *testing.T) {
 	if code != cmd.ExitError {
 		t.Errorf("code = %d, want %d", code, cmd.ExitError)
 	}
-	if stderr == "" {
-		t.Error("expected stderr message")
+	if !strings.Contains(stderr, "path does not exist") {
+		t.Errorf("stderr should say 'path does not exist': %s", stderr)
+	}
+	if !strings.Contains(stderr, "hint:") || !strings.Contains(stderr, "--path") {
+		t.Errorf("stderr missing --path hint: %s", stderr)
+	}
+}
+
+func TestInit_PathIsFile_ReturnsError(t *testing.T) {
+	run := runner(t)
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "not-a-dir.txt")
+	if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, code := run("init", "--path", filePath, "--name", "x")
+	if code != cmd.ExitError {
+		t.Errorf("code = %d, want %d", code, cmd.ExitError)
+	}
+	if !strings.Contains(stderr, "not a directory") {
+		t.Errorf("stderr should say 'not a directory': %s", stderr)
 	}
 }
 
@@ -273,6 +295,9 @@ func TestRm_Missing_ReturnsError(t *testing.T) {
 	if !strings.Contains(stderr, "not found") {
 		t.Errorf("stderr missing 'not found': %s", stderr)
 	}
+	if !strings.Contains(stderr, "hint:") || !strings.Contains(stderr, "lane list") {
+		t.Errorf("stderr missing 'lane list' hint: %s", stderr)
+	}
 }
 
 // -- use / unuse --------------------------------------------------------
@@ -306,6 +331,9 @@ func TestUse_UnknownProject_ReturnsError(t *testing.T) {
 	if !strings.Contains(stderr, "not found") {
 		t.Errorf("stderr missing 'not found': %s", stderr)
 	}
+	if !strings.Contains(stderr, "hint:") || !strings.Contains(stderr, "lane list") {
+		t.Errorf("stderr missing 'lane list' hint: %s", stderr)
+	}
 }
 
 func TestUse_Collision_EmptyStdoutAndErrorExit(t *testing.T) {
@@ -328,6 +356,9 @@ func TestUse_Collision_EmptyStdoutAndErrorExit(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "collision") {
 		t.Errorf("stderr missing 'collision': %s", stderr)
+	}
+	if !strings.Contains(stderr, "hint:") || !strings.Contains(stderr, "lane doctor") {
+		t.Errorf("stderr missing 'lane doctor' hint: %s", stderr)
 	}
 }
 

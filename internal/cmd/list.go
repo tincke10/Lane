@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -53,6 +54,9 @@ func cmdRm(args []string, stdout, stderr io.Writer) int {
 	}
 	if err := reg.Remove(name); err != nil {
 		fmt.Fprintf(stderr, "lane: %v\n", err)
+		if errors.Is(err, registry.ErrNotFound) {
+			fmt.Fprintln(stderr, "  hint: run `lane list` to see registered projects")
+		}
 		return ExitError
 	}
 	if err := reg.Save(); err != nil {

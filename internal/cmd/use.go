@@ -29,6 +29,7 @@ func cmdUse(args []string, stdout, stderr io.Writer) int {
 	project, ok := reg.Get(name)
 	if !ok {
 		fmt.Fprintf(stderr, "lane: project %q not found\n", name)
+		fmt.Fprintln(stderr, "  hint: run `lane list` to see registered projects")
 		return ExitError
 	}
 
@@ -37,6 +38,7 @@ func cmdUse(args []string, stdout, stderr io.Writer) int {
 		for _, c := range collisions {
 			fmt.Fprintf(stderr, "  %s=%d is in use\n", c.Name, c.Port)
 		}
+		fmt.Fprintln(stderr, "  hint: stop the process using that port, or run `lane doctor` for details")
 		return ExitError
 	}
 

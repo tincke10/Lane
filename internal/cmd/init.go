@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,6 +30,23 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 		return ExitError
 	}
 
+	// Preflight on the path so the user gets a clean message before the
+	// stack detector turns this into a chain like "detect stack: stat ...".
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Fprintf(stderr, "lane: path does not exist: %s\n", path)
+			fmt.Fprintln(stderr, "  hint: check --path, or omit --path to use the current directory")
+		} else {
+			fmt.Fprintf(stderr, "lane: cannot read path %s: %v\n", path, err)
+		}
+		return ExitError
+	}
+	if !info.IsDir() {
+		fmt.Fprintf(stderr, "lane: path is not a directory: %s\n", path)
+		return ExitError
+	}
+
 	name := *nameFlag
 	if name == "" {
 		name = filepath.Base(path)
@@ -41,6 +59,7 @@ func cmdInit(args []string, stdout, stderr io.Writer) int {
 	}
 	if _, exists := reg.Get(name); exists {
 		fmt.Fprintf(stderr, "lane: project %q already registered\n", name)
+		fmt.Fprintf(stderr, "  hint: pick a different --name, or run `lane rm %s` first\n", name)
 		return ExitError
 	}
 
