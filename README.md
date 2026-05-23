@@ -138,7 +138,7 @@ $ eval "$(lane unuse)"
 
 | Command | What it does |
 |---|---|
-| `lane init [--name N] [--path P]` | Register the project in `P` (defaults to cwd). Detects the stack, allocates free ports, persists to the registry. |
+| `lane init [--name N] [--path P]` | Register the project in `P` (defaults to cwd). Detects the stack, allocates free ports, persists to the registry, and warns if a present `docker-compose.yml` does not reference the env vars Lane just allocated. |
 | `lane use <name>` | Print `export` statements for the project. Aborts (with empty stdout and a stderr message) if any reserved port is currently in use. |
 | `lane unuse` | Print `unset` statements for the project named in `LANE_ACTIVE_PROJECT`. Safe to run when nothing is active. |
 | `lane list` (alias `ls`) | List all registered projects with their paths, stacks, and ports. |
@@ -174,6 +174,27 @@ intentionally conservative.
 A malformed `composer.json` or `package.json` still yields the base tag
 (`php`, `node`) and silently skips the deeper detection — Lane will not
 fail because of a transient broken JSON file.
+
+## Convention check at `init`
+
+When `lane init` finds a `docker-compose.yml` (or `compose.yml` /
+`compose.yaml` / `docker-compose.yaml`), it cross-references every env
+var it just allocated against the file's contents. If a var is not
+referenced — for example, the compose file hardcodes `"80:80"` instead
+of `"${APP_PORT:-80}:80"` — Lane prints a warning at the end of
+registration:
+
+```
+  warning: docker-compose.yml does not reference these env vars:
+    - APP_PORT (allocated 8080, but compose will ignore it)
+  use the ${VAR:-default}:default pattern in your compose ports to opt in.
+```
+
+The warning never fails `lane init`. You can still register the project
+and decide later whether to update the compose file. Lane recognizes
+the standard shell forms: `${VAR}`, `${VAR:-default}`, `${VAR:?error}`,
+and bare `$VAR`. Prefix collisions like `${VAR_EXTRA}` do not count as
+references to `VAR`.
 
 ---
 
@@ -336,6 +357,7 @@ internal/ports/       Free-port detection and collision-aware allocator.
 internal/stack/       Filesystem-based stack detection (composer/package.json/etc).
 internal/activator/   Generates POSIX `export` / `unset` statements.
 internal/doctor/      Diagnostic checks for registry health (used by `lane doctor`).
+internal/convention/  Validates that docker-compose references the env vars Lane allocates.
 internal/cmd/         CLI dispatcher and subcommand handlers.
 ```
 
