@@ -7,7 +7,7 @@ import (
 
 func cmdHook(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
-		fmt.Fprintln(stderr, "lane: usage: lane hook <bash|zsh>")
+		fmt.Fprintln(stderr, "lane: usage: lane hook <bash|zsh|fish>")
 		return ExitUsage
 	}
 
@@ -16,8 +16,10 @@ func cmdHook(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, bashHook)
 	case "zsh":
 		fmt.Fprint(stdout, zshHook)
+	case "fish":
+		fmt.Fprint(stdout, fishHook)
 	default:
-		fmt.Fprintf(stderr, "lane: unsupported shell %q (supported: bash, zsh)\n", args[0])
+		fmt.Fprintf(stderr, "lane: unsupported shell %q (supported: bash, zsh, fish)\n", args[0])
 		return ExitUsage
 	}
 	return ExitOK
@@ -51,4 +53,15 @@ typeset -ag precmd_functions
 if (( ! ${precmd_functions[(I)_lane_hook]} )); then
   precmd_functions+=(_lane_hook)
 fi
+`
+
+// fishHook binds to the fish_prompt event, which fires before each
+// prompt — equivalent in spirit to bash's PROMPT_COMMAND and zsh's
+// precmd. Output is piped into `source` so fish executes it in the
+// current scope. The functions -q guard makes re-sourcing idempotent.
+const fishHook = `if not functions -q _lane_hook
+    function _lane_hook --on-event fish_prompt
+        lane export --shell fish 2>/dev/null | source
+    end
+end
 `

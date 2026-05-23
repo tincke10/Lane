@@ -11,11 +11,15 @@ import (
 )
 
 func cmdUse(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
-		fmt.Fprintln(stderr, "lane: usage: lane use <name>")
+	shell, rest, ok := parseShellFlag("use", args, stderr)
+	if !ok {
 		return ExitUsage
 	}
-	name := args[0]
+	if len(rest) != 1 {
+		fmt.Fprintln(stderr, "lane: usage: lane use [--shell posix|fish] <name>")
+		return ExitUsage
+	}
+	name := rest[0]
 
 	reg, err := registry.Load()
 	if err != nil {
@@ -39,13 +43,17 @@ func cmdUse(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprint(stdout, activator.Activate(registry.NamedProject{
 		Name:    name,
 		Project: project,
-	}))
+	}, shell))
 	return ExitOK
 }
 
 func cmdUnuse(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 0 {
-		fmt.Fprintln(stderr, "lane: usage: lane unuse")
+	shell, rest, ok := parseShellFlag("unuse", args, stderr)
+	if !ok {
+		return ExitUsage
+	}
+	if len(rest) != 0 {
+		fmt.Fprintln(stderr, "lane: usage: lane unuse [--shell posix|fish]")
 		return ExitUsage
 	}
 
@@ -53,7 +61,7 @@ func cmdUnuse(args []string, stdout, stderr io.Writer) int {
 	if active == "" {
 		// No active project. Emit a no-op unset so eval is safe and the
 		// shell ends up with LANE_ACTIVE_PROJECT cleared either way.
-		fmt.Fprintf(stdout, "unset %s\n", activator.ActiveProjectEnvVar)
+		fmt.Fprint(stdout, activator.UnsetActiveProject(shell))
 		return ExitOK
 	}
 
@@ -64,14 +72,13 @@ func cmdUnuse(args []string, stdout, stderr io.Writer) int {
 	}
 	project, ok := reg.Get(active)
 	if !ok {
-		// Active project no longer in registry — still clear the marker.
-		fmt.Fprintf(stdout, "unset %s\n", activator.ActiveProjectEnvVar)
+		fmt.Fprint(stdout, activator.UnsetActiveProject(shell))
 		return ExitOK
 	}
 
 	fmt.Fprint(stdout, activator.Deactivate(registry.NamedProject{
 		Name:    active,
 		Project: project,
-	}))
+	}, shell))
 	return ExitOK
 }

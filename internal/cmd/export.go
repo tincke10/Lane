@@ -19,8 +19,12 @@ import (
 // unavailable). Breaking the user's prompt over a transient error would
 // be worse than producing no output.
 func cmdExport(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 0 {
-		fmt.Fprintln(stderr, "lane: usage: lane export")
+	shell, rest, ok := parseShellFlag("export", args, stderr)
+	if !ok {
+		return ExitUsage
+	}
+	if len(rest) != 0 {
+		fmt.Fprintln(stderr, "lane: usage: lane export [--shell posix|fish]")
 		return ExitUsage
 	}
 
@@ -42,10 +46,10 @@ func cmdExport(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if current != "" {
-		writeDeactivate(stdout, reg, current)
+		writeDeactivate(stdout, reg, current, shell)
 	}
 	if target != "" {
-		writeActivate(stdout, reg, target)
+		writeActivate(stdout, reg, target, shell)
 	}
 	return ExitOK
 }
@@ -74,21 +78,21 @@ func findProjectForPath(cwd string, reg *registry.Registry) string {
 	}
 }
 
-func writeActivate(w io.Writer, reg *registry.Registry, name string) {
+func writeActivate(w io.Writer, reg *registry.Registry, name string, sh activator.Shell) {
 	p, ok := reg.Get(name)
 	if !ok {
 		return
 	}
-	fmt.Fprint(w, activator.Activate(registry.NamedProject{Name: name, Project: p}))
+	fmt.Fprint(w, activator.Activate(registry.NamedProject{Name: name, Project: p}, sh))
 }
 
-func writeDeactivate(w io.Writer, reg *registry.Registry, name string) {
+func writeDeactivate(w io.Writer, reg *registry.Registry, name string, sh activator.Shell) {
 	p, ok := reg.Get(name)
 	if !ok {
 		// The recorded active project is no longer registered. Clear
 		// the marker so the shell does not stay stuck on a ghost name.
-		fmt.Fprintf(w, "unset %s\n", activator.ActiveProjectEnvVar)
+		fmt.Fprint(w, activator.UnsetActiveProject(sh))
 		return
 	}
-	fmt.Fprint(w, activator.Deactivate(registry.NamedProject{Name: name, Project: p}))
+	fmt.Fprint(w, activator.Deactivate(registry.NamedProject{Name: name, Project: p}, sh))
 }

@@ -23,21 +23,27 @@ const usage = `lane — port-collision-free project switcher
 
 Usage:
   lane init [--name NAME] [--path PATH]   register the project in PATH (default: cwd)
-  lane use <name>                          print shell exports for <name>
-  lane unuse                               print shell unsets for the active project
+  lane use [--shell posix|fish] <name>     print shell exports for <name>
+  lane unuse [--shell posix|fish]          print shell unsets for the active project
   lane list                                list registered projects
   lane rm <name>                           remove a project from the registry
   lane doctor                              diagnose registry health and port conflicts
-  lane hook <bash|zsh>                     print shell hook for auto-activation on cd
-  lane export                              hook-driven activation diff (called from prompt)
+  lane hook <bash|zsh|fish>                print shell hook for auto-activation on cd
+  lane export [--shell posix|fish]         hook-driven activation diff (called from prompt)
   lane help                                show this help
 
 Activation pattern (manual, bash/zsh):
   eval "$(lane use my-project)"
   eval "$(lane unuse)"
 
-Auto-activation (add to ~/.bashrc or ~/.zshrc once):
-  eval "$(lane hook zsh)"
+Activation pattern (manual, fish):
+  lane use --shell fish my-project | source
+  lane unuse --shell fish | source
+
+Auto-activation (add to your rc file once):
+  eval "$(lane hook zsh)"            # zsh
+  eval "$(lane hook bash)"           # bash
+  lane hook fish | source             # fish (in ~/.config/fish/config.fish)
 `
 
 // Run dispatches a Lane subcommand. args is the program args WITHOUT the

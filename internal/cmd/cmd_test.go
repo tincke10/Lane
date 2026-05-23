@@ -696,3 +696,105 @@ func TestExport_BadArgs_ReturnsUsage(t *testing.T) {
 		t.Errorf("stderr missing usage: %s", stderr)
 	}
 }
+
+// -- fish shell ---------------------------------------------------------
+
+func TestHook_Fish_EmitsOnPromptEvent(t *testing.T) {
+	run := runner(t)
+	stdout, _, code := run("hook", "fish")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "fish_prompt") {
+		t.Errorf("fish hook missing fish_prompt event: %s", stdout)
+	}
+	if !strings.Contains(stdout, "lane export --shell fish") {
+		t.Errorf("fish hook missing fish export call: %s", stdout)
+	}
+	if !strings.Contains(stdout, "| source") {
+		t.Errorf("fish hook missing source pipe: %s", stdout)
+	}
+}
+
+func TestUse_FishShell_EmitsFishSyntax(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	stdout, _, code := run("use", "--shell", "fish", "myapp")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "set -gx LANE_ACTIVE_PROJECT 'myapp'") {
+		t.Errorf("missing fish-style LANE_ACTIVE_PROJECT: %s", stdout)
+	}
+	if !strings.Contains(stdout, "set -gx APP_PORT") {
+		t.Errorf("missing fish-style APP_PORT: %s", stdout)
+	}
+	if strings.Contains(stdout, "export ") {
+		t.Errorf("fish output should not contain 'export ': %s", stdout)
+	}
+}
+
+func TestUnuse_FishShell_EmitsFishSyntax(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+	t.Setenv("LANE_ACTIVE_PROJECT", "myapp")
+
+	stdout, _, code := run("unuse", "--shell", "fish")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "set -e LANE_ACTIVE_PROJECT") {
+		t.Errorf("missing fish-style unset: %s", stdout)
+	}
+	if strings.Contains(stdout, "unset ") {
+		t.Errorf("fish output should not contain 'unset ': %s", stdout)
+	}
+}
+
+func TestExport_FishShell_EmitsFishSyntax(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	t.Chdir(proj)
+
+	stdout, _, code := run("export", "--shell", "fish")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "set -gx LANE_ACTIVE_PROJECT 'myapp'") {
+		t.Errorf("missing fish-style export: %s", stdout)
+	}
+}
+
+func TestShellFlag_InvalidValue_ReturnsUsage(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	_, stderr, code := run("use", "--shell", "powershell", "myapp")
+	if code != cmd.ExitUsage {
+		t.Errorf("code = %d, want %d", code, cmd.ExitUsage)
+	}
+	if !strings.Contains(stderr, "invalid --shell") {
+		t.Errorf("stderr missing invalid-shell message: %s", stderr)
+	}
+}
+
+func TestShellFlag_PosixDefault_StillWorks(t *testing.T) {
+	// Existing flow with no --shell should keep emitting POSIX.
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	stdout, _, code := run("use", "myapp")
+	if code != cmd.ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(stdout, "export LANE_ACTIVE_PROJECT='myapp'") {
+		t.Errorf("default should be POSIX, got: %s", stdout)
+	}
+}
