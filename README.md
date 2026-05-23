@@ -139,13 +139,13 @@ $ eval "$(lane unuse)"
 | Command | What it does |
 |---|---|
 | `lane init [--name N] [--path P]` | Register the project in `P` (defaults to cwd). Detects the stack, allocates free ports, persists to the registry, and warns if a present `docker-compose.yml` does not reference the env vars Lane just allocated. |
-| `lane use <name>` | Print `export` statements for the project. Aborts (with empty stdout and a stderr message) if any reserved port is currently in use. |
-| `lane unuse` | Print `unset` statements for the project named in `LANE_ACTIVE_PROJECT`. Safe to run when nothing is active. |
+| `lane use [--shell posix\|fish] <name>` | Print activation statements for the project. POSIX (bash/zsh) by default, fish syntax via `--shell fish`. Aborts (with empty stdout and a stderr message) if any reserved port is currently in use. |
+| `lane unuse [--shell posix\|fish]` | Print deactivation statements for the project named in `LANE_ACTIVE_PROJECT`. Safe to run when nothing is active. |
 | `lane list` (alias `ls`) | List all registered projects with their paths, stacks, and ports. |
 | `lane rm <name>` (alias `remove`) | Remove a project from the registry. |
 | `lane doctor` | Diagnose registry health: missing paths, cross-project port collisions, currently bound ports, stack drift, orphaned active project. Exits non-zero only on errors; warnings are informational. |
-| `lane hook <bash\|zsh>` | Print the shell hook code for auto-activation on `cd`. Run once during shell setup. |
-| `lane export` | Hook-driven activation diff. Called by the installed hook on every prompt; not typically invoked directly. |
+| `lane hook <bash\|zsh\|fish>` | Print the shell hook code for auto-activation on `cd`. Run once during shell setup. |
+| `lane export [--shell posix\|fish]` | Hook-driven activation diff. Called by the installed hook on every prompt; not typically invoked directly. |
 | `lane help` | Show usage. |
 | `lane version` | Print the version. |
 
@@ -229,10 +229,20 @@ yourself.
 
 ### One-shot per shell
 
+bash / zsh:
+
 ```bash
 eval "$(lane use my-project)"
 # ... work ...
 eval "$(lane unuse)"
+```
+
+fish:
+
+```fish
+lane use --shell fish my-project | source
+# ... work ...
+lane unuse --shell fish | source
 ```
 
 ### Persistent shell aliases (bash / zsh)
@@ -268,6 +278,12 @@ Or to `~/.bashrc`:
 
 ```bash
 eval "$(lane hook bash)"
+```
+
+Or to `~/.config/fish/config.fish`:
+
+```fish
+lane hook fish | source
 ```
 
 What you get:
