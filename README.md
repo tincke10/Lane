@@ -146,8 +146,11 @@ $ eval "$(lane unuse)"
 | `lane doctor` | Diagnose registry health: missing paths, cross-project port collisions, currently bound ports, stack drift, orphaned active project. Exits non-zero only on errors; warnings are informational. |
 | `lane hook <bash\|zsh\|fish>` | Print the shell hook code for auto-activation on `cd`. Run once during shell setup. |
 | `lane export [--shell posix\|fish]` | Hook-driven activation diff. Called by the installed hook on every prompt; not typically invoked directly. |
-| `lane serve [extras...]` | Run `php artisan serve` on Lane's `$APP_PORT` (falls back to `8000` outside any project). Extras are forwarded to artisan. |
-| `lane vite [extras...]` | Run `npx vite` on Lane's `$VITE_PORT` (falls back to `5173` outside any project). Extras are forwarded to vite. |
+| `lane serve [extras...]` | Run `php artisan serve` on Lane's `$APP_PORT` (falls back to `8000` outside any project). Extras forwarded to artisan. |
+| `lane vite [extras...]` | Run `npx vite` on Lane's `$VITE_PORT` (falls back to `5173`). Extras forwarded to vite. |
+| `lane next [extras...]` | Run `npx next dev -p $APP_PORT` (falls back to `3000`). Extras forwarded to next. |
+| `lane flask [extras...]` | Run `flask run --port=$APP_PORT` (falls back to `5000`). Requires `FLASK_APP` in env. Extras forwarded. |
+| `lane django [extras...]` | Run `python manage.py runserver $APP_PORT` (falls back to `8000`). Falls back to `python3` if `python` is absent. Extras forwarded. |
 | `lane help` | Show usage. |
 | `lane version` | Print the version. |
 
@@ -169,8 +172,9 @@ intentionally conservative.
 | Marker file(s) | Base tag | Deeper tag |
 |---|---|---|
 | `composer.json` | `php` | `laravel` (if `require."laravel/framework"` is present) |
-| `package.json` | `node` | `vite` (if `vite` is in `dependencies` or `devDependencies`) |
-| `pyproject.toml` or `requirements.txt` | `python` | — |
+| `package.json` | `node` | `vite`, `nextjs` (if the respective package is in `dependencies` or `devDependencies`) |
+| `pyproject.toml` or `requirements.txt` | `python` | `flask`, `django` (substring, case-insensitive) |
+| `manage.py` (in addition to the above) | `python` | `django` |
 | `docker-compose.yml` / `docker-compose.yaml` / `compose.yml` / `compose.yaml` | `docker` | `mysql`, `postgres`, `redis` (substring match) |
 
 A malformed `composer.json` or `package.json` still yields the base tag
@@ -210,10 +214,19 @@ the same port.
 | Stack marker | Env var | Base port |
 |---|---|---|
 | `laravel` | `APP_PORT` | `8080` |
+| `django` | `APP_PORT` | `8000` |
+| `flask` | `APP_PORT` | `5000` |
+| `nextjs` | `APP_PORT` | `3000` |
 | `vite` | `VITE_PORT` | `5173` |
 | `mysql` | `FORWARD_DB_PORT` | `33060` |
 | `postgres` | `FORWARD_DB_PORT` | `54320` |
 | `redis` | `FORWARD_REDIS_PORT` | `63790` |
+
+When multiple frameworks compete for `APP_PORT`, precedence is
+`laravel > django > flask > nextjs`. Likewise `mysql` wins over
+`postgres` for `FORWARD_DB_PORT`. Projects that legitimately combine
+two backends (rare) can override at runtime via `lane serve --port=...`
+or by editing `projects.toml` manually.
 
 Lane scans up to 1000 consecutive ports above the base before giving
 up. The check uses a TCP listen on `127.0.0.1`, which is inherently
@@ -334,13 +347,25 @@ Lane exports (Sail/Docker do the right thing automatically via the
 vite` do not). Lane ships runners that bridge the gap:
 
 ```bash
-# inside a registered Laravel project
+# Laravel
 lane serve              # = php artisan serve --port=$APP_PORT
-lane serve --host=0.0.0.0   # extras are forwarded
+lane serve --host=0.0.0.0
 
-# inside a registered Vite project
+# Vite (any frontend project with vite installed)
 lane vite               # = npx vite --port=$VITE_PORT
-lane vite --open        # extras are forwarded
+lane vite --open
+
+# Next.js
+lane next               # = npx next dev -p $APP_PORT
+lane next --turbo
+
+# Flask (requires FLASK_APP env or .flaskenv)
+lane flask              # = flask run --port=$APP_PORT
+lane flask --debug
+
+# Django
+lane django             # = python manage.py runserver $APP_PORT
+lane django --noreload  # falls back to python3 if `python` is unavailable
 ```
 
 Outside a Lane project the runners fall back to the framework's own
