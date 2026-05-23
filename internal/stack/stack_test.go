@@ -147,7 +147,8 @@ func TestDetect_PackageJsonWithoutVite_ReturnsOnlyNode(t *testing.T) {
 
 func TestDetect_RequirementsTxt_ReturnsPython(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "requirements.txt", "flask==3.0\n")
+	// requests is a plain library that does not match flask/django markers.
+	writeFile(t, dir, "requirements.txt", "requests==2.31\n")
 
 	got, err := stack.Detect(dir)
 	if err != nil {
@@ -208,6 +209,65 @@ services:
 		t.Fatalf("Detect: %v", err)
 	}
 	want := []string{"docker", "postgres"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Detect = %v, want %v", got, want)
+	}
+}
+
+func TestDetect_PackageJsonWithNext_ReturnsNodeAndNextjs(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "package.json", `{
+  "name": "site",
+  "dependencies": {"next": "^14.0.0", "react": "^18.0.0"}
+}`)
+	got, err := stack.Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	want := []string{"nextjs", "node"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Detect = %v, want %v", got, want)
+	}
+}
+
+func TestDetect_RequirementsWithFlask_ReturnsFlask(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "requirements.txt", "flask==3.0.0\ngunicorn==21\n")
+	got, _ := stack.Detect(dir)
+	want := []string{"flask", "python"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Detect = %v, want %v", got, want)
+	}
+}
+
+func TestDetect_RequirementsWithDjango_ReturnsDjango(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "requirements.txt", "Django==5.0\npsycopg2==2.9\n")
+	got, _ := stack.Detect(dir)
+	want := []string{"django", "python"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Detect = %v, want %v", got, want)
+	}
+}
+
+func TestDetect_ManagePy_ReturnsDjango(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "manage.py", "#!/usr/bin/env python\nimport django\n")
+	got, _ := stack.Detect(dir)
+	want := []string{"django", "python"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Detect = %v, want %v", got, want)
+	}
+}
+
+func TestDetect_PyprojectWithFlask_ReturnsFlask(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "pyproject.toml", `[project]
+name = "myapp"
+dependencies = ["flask>=3.0", "requests"]
+`)
+	got, _ := stack.Detect(dir)
+	want := []string{"flask", "python"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Detect = %v, want %v", got, want)
 	}

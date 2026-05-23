@@ -30,8 +30,11 @@ Usage:
   lane doctor                              diagnose registry health and port conflicts
   lane hook <bash|zsh|fish>                print shell hook for auto-activation on cd
   lane export [--shell posix|fish]         hook-driven activation diff (called from prompt)
-  lane serve [extras...]                   run 'php artisan serve' on Lane's $APP_PORT
-  lane vite  [extras...]                   run 'npx vite' on Lane's $VITE_PORT
+  lane serve  [extras...]                  run 'php artisan serve' on Lane's $APP_PORT
+  lane vite   [extras...]                  run 'npx vite' on Lane's $VITE_PORT
+  lane next   [extras...]                  run 'npx next dev' on Lane's $APP_PORT
+  lane flask  [extras...]                  run 'flask run' on Lane's $APP_PORT
+  lane django [extras...]                  run 'python manage.py runserver' on Lane's $APP_PORT
   lane help                                show this help
 
 Activation pattern (manual, bash/zsh):
@@ -77,6 +80,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return cmdServe(args[1:], stdout, stderr)
 	case "vite":
 		return cmdVite(args[1:], stdout, stderr)
+	case "next":
+		return cmdNext(args[1:], stdout, stderr)
+	case "flask":
+		return cmdFlask(args[1:], stdout, stderr)
+	case "django":
+		return cmdDjango(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return ExitOK
@@ -98,26 +107,51 @@ func allReservedPorts(r *registry.Registry) map[int]struct{} {
 	return out
 }
 
-// portBasesFor maps detected stack markers to the env vars Lane allocates,
-// each paired with its preferred starting port. The same env var produced
-// by multiple markers is allowed; later wins, but ordering is deterministic
-// because the caller iterates sorted stack markers.
+// portBasesFor maps detected stack markers to the env vars Lane allocates
+// and the preferred starting port for each. Multiple frameworks can claim
+// the same env var (APP_PORT in particular); when that happens we resolve
+// by explicit precedence rather than relying on map-iteration order.
+//
+// Precedence for APP_PORT: laravel > django > flask > nextjs. The reasoning
+// is "most established framework wins" — projects that mix two are rare,
+// and when they happen the user can override via `--port=` extras.
 func portBasesFor(stackMarkers []string) map[string]int {
 	out := make(map[string]int)
-	for _, m := range stackMarkers {
-		switch m {
-		case "laravel":
-			out["APP_PORT"] = 8080
-		case "vite":
-			out["VITE_PORT"] = 5173
-		case "mysql":
-			out["FORWARD_DB_PORT"] = 33060
-		case "postgres":
-			out["FORWARD_DB_PORT"] = 54320
-		case "redis":
-			out["FORWARD_REDIS_PORT"] = 63790
+	has := func(want string) bool {
+		for _, m := range stackMarkers {
+			if m == want {
+				return true
+			}
 		}
+		return false
 	}
+
+	switch {
+	case has("laravel"):
+		out["APP_PORT"] = 8080
+	case has("django"):
+		out["APP_PORT"] = 8000
+	case has("flask"):
+		out["APP_PORT"] = 5000
+	case has("nextjs"):
+		out["APP_PORT"] = 3000
+	}
+
+	if has("vite") {
+		out["VITE_PORT"] = 5173
+	}
+
+	switch {
+	case has("mysql"):
+		out["FORWARD_DB_PORT"] = 33060
+	case has("postgres"):
+		out["FORWARD_DB_PORT"] = 54320
+	}
+
+	if has("redis") {
+		out["FORWARD_REDIS_PORT"] = 63790
+	}
+
 	return out
 }
 

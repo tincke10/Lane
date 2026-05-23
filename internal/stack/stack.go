@@ -71,21 +71,45 @@ func detectPackageJSON(dir string, m map[string]struct{}) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return
 	}
-	if _, ok := p.Dependencies["vite"]; ok {
-		m["vite"] = struct{}{}
-		return
+	hasDep := func(name string) bool {
+		_, inDeps := p.Dependencies[name]
+		_, inDevDeps := p.DevDependencies[name]
+		return inDeps || inDevDeps
 	}
-	if _, ok := p.DevDependencies["vite"]; ok {
+	if hasDep("vite") {
 		m["vite"] = struct{}{}
+	}
+	if hasDep("next") {
+		m["nextjs"] = struct{}{}
 	}
 }
 
 func detectPython(dir string, m map[string]struct{}) {
+	// Read requirements.txt and pyproject.toml content so we can also
+	// detect the framework (flask, django), not just the language. The
+	// detection is substring-based and case-insensitive; good enough for
+	// MVP without pulling in a TOML/requirements-spec parser.
+	hasPython := false
 	for _, name := range []string{"pyproject.toml", "requirements.txt"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-			m["python"] = struct{}{}
-			return
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			continue
 		}
+		hasPython = true
+		lower := bytes.ToLower(data)
+		if bytes.Contains(lower, []byte("flask")) {
+			m["flask"] = struct{}{}
+		}
+		if bytes.Contains(lower, []byte("django")) {
+			m["django"] = struct{}{}
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "manage.py")); err == nil {
+		hasPython = true
+		m["django"] = struct{}{}
+	}
+	if hasPython {
+		m["python"] = struct{}{}
 	}
 }
 
