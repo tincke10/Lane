@@ -27,6 +27,7 @@ Usage:
   lane unuse                               print shell unsets for the active project
   lane list                                list registered projects
   lane rm <name>                           remove a project from the registry
+  lane doctor                              diagnose registry health and port conflicts
   lane help                                show this help
 
 Activation pattern (bash/zsh):
@@ -53,6 +54,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return cmdList(args[1:], stdout, stderr)
 	case "rm", "remove":
 		return cmdRm(args[1:], stdout, stderr)
+	case "doctor":
+		return cmdDoctor(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return ExitOK

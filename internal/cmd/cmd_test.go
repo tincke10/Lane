@@ -327,3 +327,101 @@ func mustBind(t *testing.T, port int) net.Listener {
 	}
 	return l
 }
+
+// -- doctor -------------------------------------------------------------
+
+func TestDoctor_EmptyRegistry_ExitsOK(t *testing.T) {
+	run := runner(t)
+	stdout, _, code := run("doctor")
+	if code != cmd.ExitOK {
+		t.Errorf("code = %d, want %d", code, cmd.ExitOK)
+	}
+	if !strings.Contains(stdout, "no projects") {
+		t.Errorf("stdout = %s", stdout)
+	}
+}
+
+func TestDoctor_HealthyProject_ExitsOK(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	stdout, _, code := run("doctor")
+	if code != cmd.ExitOK {
+		t.Errorf("code = %d, want %d — stdout=%s", code, cmd.ExitOK, stdout)
+	}
+	if !strings.Contains(stdout, "[ok]") {
+		t.Errorf("stdout missing '[ok]' tag: %s", stdout)
+	}
+	if !strings.Contains(stdout, "myapp") {
+		t.Errorf("stdout missing project name: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 ok") {
+		t.Errorf("stdout missing summary '1 ok': %s", stdout)
+	}
+}
+
+func TestDoctor_MissingPath_ExitsNonZero(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	// Remove the project directory after registration.
+	if err := os.RemoveAll(proj); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, code := run("doctor")
+	if code != cmd.ExitError {
+		t.Errorf("code = %d, want %d — stdout=%s", code, cmd.ExitError, stdout)
+	}
+	if !strings.Contains(stdout, "[error]") {
+		t.Errorf("stdout missing '[error]' tag: %s", stdout)
+	}
+	if !strings.Contains(stdout, "path does not exist") {
+		t.Errorf("stdout missing 'path does not exist': %s", stdout)
+	}
+}
+
+func TestDoctor_BoundPort_WarnsButExitsOK(t *testing.T) {
+	run := runner(t)
+	proj := laravelProject(t)
+	run("init", "--path", proj, "--name", "myapp")
+
+	listOut, _, _ := run("list")
+	port := parsePort(t, listOut, "APP_PORT")
+	l := mustBind(t, port)
+	defer l.Close()
+
+	stdout, _, code := run("doctor")
+	if code != cmd.ExitOK {
+		t.Errorf("code = %d, want %d (warns should not fail) — stdout=%s", code, cmd.ExitOK, stdout)
+	}
+	if !strings.Contains(stdout, "in use") {
+		t.Errorf("stdout missing 'in use' warning: %s", stdout)
+	}
+}
+
+func TestDoctor_OrphanedActiveProject_Warns(t *testing.T) {
+	run := runner(t)
+	t.Setenv("LANE_ACTIVE_PROJECT", "ghost-app")
+
+	stdout, _, code := run("doctor")
+	if code != cmd.ExitOK {
+		t.Errorf("code = %d, want %d — stdout=%s", code, cmd.ExitOK, stdout)
+	}
+	if !strings.Contains(stdout, "LANE_ACTIVE_PROJECT") {
+		t.Errorf("stdout missing global LANE_ACTIVE_PROJECT warning: %s", stdout)
+	}
+}
+
+func TestDoctor_BadArgs_ReturnsUsage(t *testing.T) {
+	run := runner(t)
+	_, stderr, code := run("doctor", "extra")
+	if code != cmd.ExitUsage {
+		t.Errorf("code = %d, want %d", code, cmd.ExitUsage)
+	}
+	if !strings.Contains(stderr, "usage") {
+		t.Errorf("stderr missing usage: %s", stderr)
+	}
+}
