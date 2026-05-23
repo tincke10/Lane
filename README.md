@@ -146,6 +146,8 @@ $ eval "$(lane unuse)"
 | `lane doctor` | Diagnose registry health: missing paths, cross-project port collisions, currently bound ports, stack drift, orphaned active project. Exits non-zero only on errors; warnings are informational. |
 | `lane hook <bash\|zsh\|fish>` | Print the shell hook code for auto-activation on `cd`. Run once during shell setup. |
 | `lane export [--shell posix\|fish]` | Hook-driven activation diff. Called by the installed hook on every prompt; not typically invoked directly. |
+| `lane serve [extras...]` | Run `php artisan serve` on Lane's `$APP_PORT` (falls back to `8000` outside any project). Extras are forwarded to artisan. |
+| `lane vite [extras...]` | Run `npx vite` on Lane's `$VITE_PORT` (falls back to `5173` outside any project). Extras are forwarded to vite. |
 | `lane help` | Show usage. |
 | `lane version` | Print the version. |
 
@@ -323,6 +325,31 @@ $ echo $?
 ```
 
 ---
+
+## Framework runners
+
+Some frameworks read their port from a CLI flag rather than the env vars
+Lane exports (Sail/Docker do the right thing automatically via the
+`${APP_PORT:-80}:80` convention; standalone `php artisan serve` and `npx
+vite` do not). Lane ships runners that bridge the gap:
+
+```bash
+# inside a registered Laravel project
+lane serve              # = php artisan serve --port=$APP_PORT
+lane serve --host=0.0.0.0   # extras are forwarded
+
+# inside a registered Vite project
+lane vite               # = npx vite --port=$VITE_PORT
+lane vite --open        # extras are forwarded
+```
+
+Outside a Lane project the runners fall back to the framework's own
+default (`8000` for artisan, `5173` for vite), so they remain safe to
+alias to plain `serve` / `vite-dev` in your shell if you want.
+
+For Sail / Docker Compose users: keep using `docker compose up` /
+`sail up` as before. The compose file's `${APP_PORT:-80}:80` pattern
+picks up Lane's exported env vars automatically — no runner needed.
 
 ## Configuration
 
