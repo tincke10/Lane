@@ -30,6 +30,8 @@ Usage:
   lane doctor                              diagnose registry health and port conflicts
   lane hook <bash|zsh|fish>                print shell hook for auto-activation on cd
   lane export [--shell posix|fish]         hook-driven activation diff (called from prompt)
+  lane serve [extras...]                   run 'php artisan serve' on Lane's $APP_PORT
+  lane vite  [extras...]                   run 'npx vite' on Lane's $VITE_PORT
   lane help                                show this help
 
 Activation pattern (manual, bash/zsh):
@@ -71,6 +73,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return cmdHook(args[1:], stdout, stderr)
 	case "export":
 		return cmdExport(args[1:], stdout, stderr)
+	case "serve":
+		return cmdServe(args[1:], stdout, stderr)
+	case "vite":
+		return cmdVite(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return ExitOK
