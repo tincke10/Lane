@@ -144,6 +144,8 @@ $ eval "$(lane unuse)"
 | `lane list` (alias `ls`) | List all registered projects with their paths, stacks, and ports. |
 | `lane rm <name>` (alias `remove`) | Remove a project from the registry. |
 | `lane doctor` | Diagnose registry health: missing paths, cross-project port collisions, currently bound ports, stack drift, orphaned active project. Exits non-zero only on errors; warnings are informational. |
+| `lane hook <bash\|zsh>` | Print the shell hook code for auto-activation on `cd`. Run once during shell setup. |
+| `lane export` | Hook-driven activation diff. Called by the installed hook on every prompt; not typically invoked directly. |
 | `lane help` | Show usage. |
 | `lane version` | Print the version. |
 
@@ -228,12 +230,45 @@ lane-use my-project
 lane-unuse
 ```
 
+### Auto-activation on `cd` (recommended)
+
+Install the hook once and Lane keeps your env in sync automatically as
+you `cd` around. Each prompt, Lane walks up from the current directory,
+finds the nearest registered project, and emits the diff against what
+your shell currently has activated.
+
+Add to `~/.zshrc`:
+
+```bash
+eval "$(lane hook zsh)"
+```
+
+Or to `~/.bashrc`:
+
+```bash
+eval "$(lane hook bash)"
+```
+
+What you get:
+
+- `cd ~/code/my-laravel-app` → `APP_PORT`, `VITE_PORT`, etc. exported.
+- `cd ~/code/other-project` → previous project's vars unset, new project's exported.
+- `cd ~` (no project) → everything unset, shell back to clean state.
+- `cd deep/inside/my-laravel-app/src/components` → still activates
+  `my-laravel-app`. Lane walks up the tree until it finds a match.
+
+The hook is **silent and fast**: it does not check port availability on
+every prompt (`lane doctor` is the place for that), it does not call out
+to the network, and it stays quiet on transient errors so a broken
+registry never breaks your prompt.
+
 ### tmux / zellij / terminal tabs
 
 Because activation lives in environment variables, each tab/pane/window
-keeps its own active project. Run `lane use` in each one independently.
-This is the entire reason Lane uses shell exports instead of writing a
-file or modifying your config.
+keeps its own active project. The auto-activation hook works
+independently in each one — open a new tab, `cd` into a different
+project, and that tab activates that project without touching the
+others.
 
 ### Collision safety
 
@@ -326,7 +361,6 @@ wires them together.
 - Edit `docker-compose.yml`, `.env`, or any other file in your project.
 - Proxy or rewrite network traffic.
 - Manage Docker volumes, images, or networks.
-- Provide auto-activation on `cd` (planned for a later phase).
 
 If you need any of those, Lane will compose cleanly with the right
 dedicated tool — it stays out of the way on purpose.
